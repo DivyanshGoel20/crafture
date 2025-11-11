@@ -17,14 +17,7 @@ export function HomePage() {
   if (currentPage === 'figurine') {
     return <FigurineGenerationPage onBack={() => setCurrentPage('home')} />;
   }
-  // if (currentPage === 'figurine') {
-  //   const Figurine = lazy(() => import('../pages/FigurineGenerationPage'));
-  //   return (
-  //     <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', color: 'white' }}>Loading Figurine Builder…</div>}>
-  //       <Figurine onBack={() => setCurrentPage('home')} />
-  //     </Suspense>
-  //   );
-  // }
+
   // if (currentPage === 'history') {
   //   return <HistoryPage onBack={() => setCurrentPage('home')} />;
   // }

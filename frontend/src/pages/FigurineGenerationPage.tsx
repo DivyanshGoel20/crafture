@@ -62,7 +62,6 @@ export default function FigurineGenerationPage({ onBack }: FigurineGenerationPag
 
       const data = await response.json();
       console.log('Generation response:', data);
-      console.log('IPFS URL:', data.ipfsUrl);
       console.log('Gateway URL:', data.gatewayUrl);
       console.log('Saved to database:', data.savedToDatabase);
       if (data.success) {
