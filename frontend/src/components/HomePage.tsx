@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ImageGenerationPage } from '../pages/ImageGenerationPage';
+import FigurineGenerationPage from '../pages/FigurineGenerationPage';
 // import { HistoryPage } from '../pages/HistoryPage';
 import './HomePage.css';
 
 export function HomePage() {
-  const [currentPage, setCurrentPage] = useState<'home' | 'image'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'image' | 'figurine'>('home');
 
   // The following routes/pages are not yet part of the codebase.
   // Commenting them out to avoid import errors. Keep the UI below.
   if (currentPage === 'image') {
     return <ImageGenerationPage onBack={() => setCurrentPage('home')} />;
+  }
+
+  if (currentPage === 'figurine') {
+    return <FigurineGenerationPage onBack={() => setCurrentPage('home')} />;
   }
   // if (currentPage === 'figurine') {
   //   const Figurine = lazy(() => import('../pages/FigurineGenerationPage'));
@@ -40,7 +45,7 @@ export function HomePage() {
       <main>
         <div className="container">
           <div className="main-feature">
-            <div className="featured-card figurine-card" onClick={() => alert('Figurine Builder coming soon')}> 
+            <div className="featured-card figurine-card" onClick={() => setCurrentPage('figurine')}> 
               <div className="featured-badge">⭐ Featured</div>
               <div className="card-icon">🧸</div>
               <h2>3D NFT Figurines</h2>

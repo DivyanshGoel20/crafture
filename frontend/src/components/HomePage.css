@@ -58,7 +58,7 @@
     left: 0;
     bottom: -6px;                     /* draw a little below text baseline */
     transform: none;
-    width: 64px;
+    width: 140px;
     height: 4px;
     background: linear-gradient(90deg, #3CE37D, #2ED0A0);
     border-radius: 2px;
