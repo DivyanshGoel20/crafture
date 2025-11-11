@@ -1,17 +1,17 @@
-// import { useState } from 'react';
+import { useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-// import { ImageGenerationPage } from '../pages/ImageGenerationPage';
+import { ImageGenerationPage } from '../pages/ImageGenerationPage';
 // import { HistoryPage } from '../pages/HistoryPage';
 import './HomePage.css';
 
 export function HomePage() {
-  // const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'image'>('home');
 
   // The following routes/pages are not yet part of the codebase.
   // Commenting them out to avoid import errors. Keep the UI below.
-  // if (currentPage === 'image') {
-  //   return <ImageGenerationPage onBack={() => setCurrentPage('home')} />;
-  // }
+  if (currentPage === 'image') {
+    return <ImageGenerationPage onBack={() => setCurrentPage('home')} />;
+  }
   // if (currentPage === 'figurine') {
   //   const Figurine = lazy(() => import('../pages/FigurineGenerationPage'));
   //   return (
@@ -56,7 +56,7 @@ export function HomePage() {
           </div>
 
           <div className="secondary-options">
-            <div className="option-card image-card" onClick={() => alert('AI Images coming soon')}>
+            <div className="option-card image-card" onClick={() => setCurrentPage('image')}>
               <div className="card-icon">🎨</div>
               <h2>AI Images</h2>
               <p>Generate stunning images inspired by your NFTs using advanced AI</p>
