@@ -21,6 +21,7 @@ interface HistoryItem {
   accessUrl?: string | null;
   prompt: string;
   createdAt: string;
+  isCustomPrompt?: boolean;
 }
 
 export function HistoryPage({ onBack }: HistoryPageProps) {
@@ -91,45 +92,53 @@ export function HistoryPage({ onBack }: HistoryPageProps) {
                 <p>No items yet. Generate your first image!</p>
               )}
               {items.map((item) => {
-                // Use gatewayUrl, ipfsUrl, or filecoinUrl (in that order of preference)
-                const imageUrl = item.gatewayUrl || item.ipfsUrl || item.filecoinUrl;
-                
-                return (
-                  <div key={item.id} className="generated-image-container" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '1rem', alignItems: 'start' }}>
-                    <div style={{ width: '240px' }}>
-                      {imageUrl ? (
-                        <img 
-                          src={imageUrl} 
-                          alt={item.prompt} 
-                          className="generated-image" 
-                          style={{ maxHeight: '240px', objectFit: 'cover', width: '100%', borderRadius: '8px' }}
-                          onError={(e) => {
-                            console.error('Failed to load image:', imageUrl);
-                            e.currentTarget.style.display = 'none';
-                            const errorDiv = document.createElement('div');
-                            errorDiv.textContent = 'Image unavailable';
-                            errorDiv.style.cssText = 'height: 240px; display: flex; align-items: center; justify-content: center; color: #94a3b8;';
-                            e.currentTarget.parentElement?.appendChild(errorDiv);
-                          }}
-                        />
-                      ) : (
-                        <div style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>Image unavailable</div>
-                      )}
-                    </div>
-                    <div>
-                      <div style={{ marginBottom: '0.5rem' }}>
-                        <p style={{ color: '#cbd5e1', fontSize: '14px', marginBottom: '0.5rem' }}><strong>Prompt:</strong> {item.prompt}</p>
-                        <p style={{ color: '#94a3b8', fontSize: '12px' }}>{new Date(item.createdAt).toLocaleString()}</p>
+                  // Use gatewayUrl, ipfsUrl, or filecoinUrl (in that order of preference)
+                  const imageUrl = item.gatewayUrl || item.ipfsUrl || item.filecoinUrl;
+                  
+                  return (
+                    <div key={item.id} className="generated-image-container" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '1rem', alignItems: 'start' }}>
+                      <div style={{ width: '240px' }}>
+                        {imageUrl ? (
+                          <img 
+                            src={imageUrl} 
+                            alt={item.isCustomPrompt ? 'Custom Prompt Image' : item.prompt} 
+                            className="generated-image" 
+                            style={{ maxHeight: '240px', objectFit: 'cover', width: '100%', borderRadius: '8px' }}
+                            onError={(e) => {
+                              console.error('Failed to load image:', imageUrl);
+                              e.currentTarget.style.display = 'none';
+                              const errorDiv = document.createElement('div');
+                              errorDiv.textContent = 'Image unavailable';
+                              errorDiv.style.cssText = 'height: 240px; display: flex; align-items: center; justify-content: center; color: #94a3b8;';
+                              e.currentTarget.parentElement?.appendChild(errorDiv);
+                            }}
+                          />
+                        ) : (
+                          <div style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>Image unavailable</div>
+                        )}
                       </div>
-                      {imageUrl && (
-                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-                          <MintButton imageUrl={imageUrl} />
+                      <div>
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          {item.isCustomPrompt ? (
+                            <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '0.5rem', fontStyle: 'italic' }}>
+                              <strong>Prompt:</strong> [Custom Prompt - Hidden]
+                            </p>
+                          ) : (
+                            <p style={{ color: '#cbd5e1', fontSize: '14px', marginBottom: '0.5rem' }}>
+                              <strong>Prompt:</strong> {item.prompt}
+                            </p>
+                          )}
+                          <p style={{ color: '#94a3b8', fontSize: '12px' }}>{new Date(item.createdAt).toLocaleString()}</p>
                         </div>
-                      )}
+                        {imageUrl && (
+                          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                            <MintButton imageUrl={imageUrl} />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </div>

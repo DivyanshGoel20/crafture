@@ -345,12 +345,13 @@ function getEncryptionKey() {
 }
 
 // Save generated image to database
-async function saveToDatabase(walletAddress, filecoinUrl, prompt) {
+async function saveToDatabase(walletAddress, filecoinUrl, prompt, isCustomPrompt = false) {
   try {
     console.log('Saving to database...');
     console.log('Wallet Address:', walletAddress);
     console.log('Filecoin URL:', filecoinUrl);
     console.log('Prompt:', prompt);
+    console.log('Is Custom Prompt:', isCustomPrompt);
     
     // Validate inputs
     if (!walletAddress) {
@@ -370,7 +371,8 @@ async function saveToDatabase(walletAddress, filecoinUrl, prompt) {
     const insertData = {
       wallet_address: walletAddress, 
       ipfs_url: filecoinUrl, // Database column name kept for backward compatibility
-      prompt: prompt,
+      prompt: isCustomPrompt ? '[Custom Prompt - Hidden]' : prompt, // Hide custom prompts
+      is_custom_prompt: isCustomPrompt, // Flag to track custom prompts
       created_at: new Date().toISOString()
     };
     
@@ -528,7 +530,7 @@ app.post('/api/generate-image', async (req, res) => {
     console.log('=== IMAGE GENERATION REQUEST ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     
-    const { prompt, imageUrls, walletAddress } = req.body;
+    const { prompt, imageUrls, walletAddress, isCustomPrompt } = req.body;
     
     if (!prompt) {
       return res.status(400).json({
@@ -600,7 +602,8 @@ app.post('/api/generate-image', async (req, res) => {
         await saveToDatabase(
           walletAddress, 
           filecoinUrl, 
-          prompt
+          prompt,
+          isCustomPrompt || false
         );
         console.log('Successfully saved to database with filecoinUrl:', filecoinUrl);
       } else {
@@ -876,6 +879,152 @@ app.post('/api/create-prompt', upload.fields([
   }
 });
 
+// Fetch all custom prompts (without decrypted content)
+app.get('/api/prompts', async (req, res) => {
+  try {
+    console.log('=== FETCHING CUSTOM PROMPTS ===');
+    
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, owner_address, price_in_tfil, before_image_url, after_image_url, created_at')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Supabase Select Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch prompts' });
+    }
+    
+    console.log(`Fetched ${(data || []).length} prompts`);
+    
+    res.json({
+      success: true,
+      prompts: data || []
+    });
+  } catch (err) {
+    console.error('Error fetching prompts:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Decrypt and get prompt for use (this will handle payment in the future)
+app.post('/api/use-prompt', async (req, res) => {
+  try {
+    console.log('=== USE PROMPT REQUEST ===');
+    
+    const { promptId, walletAddress } = req.body;
+    
+    if (!promptId) {
+      return res.status(400).json({ error: 'Prompt ID is required' });
+    }
+    
+    if (!walletAddress) {
+      return res.status(400).json({ error: 'Wallet address is required' });
+    }
+    
+    // Fetch the prompt from database
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('*')
+      .eq('id', promptId)
+      .single();
+    
+    if (error || !data) {
+      return res.status(404).json({ error: 'Prompt not found' });
+    }
+    
+    // Verify payment transaction
+    const { txHash } = req.body;
+    if (!txHash) {
+      return res.status(400).json({ error: 'Transaction hash is required' });
+    }
+
+    // Verify the transaction
+    try {
+      const rpcURL = RPC_URLS.calibration.http;
+      const provider = new ethers.JsonRpcProvider(rpcURL);
+      const tx = await provider.getTransaction(txHash);
+      const receipt = await provider.getTransactionReceipt(txHash);
+      
+      if (!tx || !receipt || receipt.status !== 1) {
+        return res.status(400).json({ error: 'Invalid or failed transaction' });
+      }
+      
+      // Verify transaction details
+      const expectedAmount = ethers.parseEther(data.price_in_tfil.toString());
+      if (tx.value.toString() !== expectedAmount.toString()) {
+        return res.status(400).json({ error: 'Payment amount does not match prompt price' });
+      }
+      
+      if (tx.to?.toLowerCase() !== data.owner_address.toLowerCase()) {
+        return res.status(400).json({ error: 'Payment recipient does not match prompt owner' });
+      }
+      
+      if (tx.from?.toLowerCase() !== walletAddress.toLowerCase()) {
+        return res.status(400).json({ error: 'Payment sender does not match wallet address' });
+      }
+      
+      console.log('Payment verified successfully:', {
+        txHash,
+        amount: ethers.formatEther(tx.value),
+        from: tx.from,
+        to: tx.to
+      });
+    } catch (verifyError) {
+      console.error('Payment verification error:', verifyError);
+      return res.status(400).json({ 
+        error: 'Failed to verify payment',
+        message: verifyError.message 
+      });
+    }
+    
+    // Decrypt the prompt after payment verification
+    const encryptionKey = getEncryptionKey();
+    const decryptedPrompt = decryptPrompt(data.encrypted_prompt, encryptionKey);
+    
+    console.log('Prompt decrypted successfully for:', walletAddress);
+    
+    res.json({
+      success: true,
+      prompt: decryptedPrompt,
+      price: data.price_in_tfil,
+      ownerAddress: data.owner_address
+    });
+  } catch (err) {
+    console.error('Error using prompt:', err);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: err.message 
+    });
+  }
+});
+
+// Decrypt prompt function
+function decryptPrompt(encryptedDataBase64, encryptionKey) {
+  try {
+    // Decode base64
+    const encryptedDataJson = Buffer.from(encryptedDataBase64, 'base64').toString('utf8');
+    const encryptedData = JSON.parse(encryptedDataJson);
+    
+    // Extract components
+    const iv = Buffer.from(encryptedData.iv, 'hex');
+    const authTag = Buffer.from(encryptedData.authTag, 'hex');
+    const encrypted = encryptedData.encrypted;
+    
+    // Create decipher
+    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
+    decipher.setAuthTag(authTag);
+    
+    // Decrypt
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    console.error('Error decrypting prompt:', error.message);
+    throw new Error(`Failed to decrypt prompt: ${error.message}`);
+  }
+}
+
 // Fetch a user's generation history
 app.get('/api/history/:walletAddress', async (req, res) => {
   try {
@@ -887,7 +1036,7 @@ app.get('/api/history/:walletAddress', async (req, res) => {
     const tableName = process.env.SUPABASE_TABLE_NAME || 'AI Generated Content';
     const { data, error } = await supabase
       .from(tableName)
-      .select('id, wallet_address, ipfs_url, prompt, created_at')
+      .select('id, wallet_address, ipfs_url, prompt, created_at, is_custom_prompt')
       .eq('wallet_address', walletAddress)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -918,6 +1067,7 @@ app.get('/api/history/:walletAddress', async (req, res) => {
           cid: pieceCid, // For backward compatibility
           prompt: row.prompt,
           createdAt: row.created_at,
+          isCustomPrompt: row.is_custom_prompt || false,
         };
       })
     );
