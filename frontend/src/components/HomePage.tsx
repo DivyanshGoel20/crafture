@@ -3,10 +3,11 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ImageGenerationPage } from '../pages/ImageGenerationPage';
 import FigurineGenerationPage from '../pages/FigurineGenerationPage';
 import { HistoryPage } from '../pages/HistoryPage';
+import { CustomPromptsPage } from '../pages/CustomPromptsPage';
 import './HomePage.css';
 
 export function HomePage() {
-  const [currentPage, setCurrentPage] = useState<'home' | 'image' | 'figurine' | 'history'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'image' | 'figurine' | 'history' | 'custom-prompts'>('home');
 
   if (currentPage === 'image') {
     return <ImageGenerationPage onBack={() => setCurrentPage('home')} />;
@@ -18,6 +19,10 @@ export function HomePage() {
 
   if (currentPage === 'history') {
     return <HistoryPage onBack={() => setCurrentPage('home')} />;
+  }
+
+  if (currentPage === 'custom-prompts') {
+    return <CustomPromptsPage onBack={() => setCurrentPage('home')} />;
   }
 
   return (
@@ -71,6 +76,17 @@ export function HomePage() {
                 <span>View History</span>
                 <span>Open via Gateway</span>
                 <span>Mint</span>
+              </div>
+            </div>
+
+            <div className="option-card" onClick={() => setCurrentPage('custom-prompts')} style={{ cursor: 'pointer' }}>
+              <div className="card-icon">💡</div>
+              <h2>Custom Prompts</h2>
+              <p>Create and monetize your AI prompts</p>
+              <div className="card-features">
+                <span>Encrypted Storage</span>
+                <span>Set Your Price</span>
+                <span>Before/After Images</span>
               </div>
             </div>
           </div>

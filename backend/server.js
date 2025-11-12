@@ -6,11 +6,19 @@ import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { Synapse, RPC_URLS, TOKENS, TIME_CONSTANTS } from '@filoz/synapse-sdk';
 import { ethers } from 'ethers';
+import multer from 'multer';
+import crypto from 'crypto';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || 'https://mamkdglgjohrnwzawree.supabase.co';
@@ -284,6 +292,56 @@ async function downloadFromFilecoin(pieceCid) {
     }
     throw new Error(`Failed to download from Filecoin: ${message}`);
   }
+}
+
+// Encrypt prompt using AES-256-GCM
+function encryptPrompt(prompt, encryptionKey) {
+  try {
+    // Generate a random IV (Initialization Vector)
+    const iv = crypto.randomBytes(16);
+    
+    // Create cipher
+    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+    
+    // Encrypt the prompt
+    let encrypted = cipher.update(prompt, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    // Get authentication tag
+    const authTag = cipher.getAuthTag();
+    
+    // Combine IV, authTag, and encrypted data
+    const encryptedData = {
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      encrypted: encrypted
+    };
+    
+    // Return as base64 encoded JSON for easy storage
+    return Buffer.from(JSON.stringify(encryptedData)).toString('base64');
+  } catch (error) {
+    console.error('Error encrypting prompt:', error.message);
+    throw new Error(`Failed to encrypt prompt: ${error.message}`);
+  }
+}
+
+// Get or generate encryption key from environment variable
+function getEncryptionKey() {
+  // Use environment variable if set, otherwise generate a default (not recommended for production)
+  const keyFromEnv = process.env.PROMPT_ENCRYPTION_KEY;
+  
+  if (keyFromEnv) {
+    // Key should be 32 bytes (256 bits) for AES-256
+    const keyBuffer = Buffer.from(keyFromEnv, 'hex');
+    if (keyBuffer.length === 32) {
+      return keyBuffer;
+    }
+    throw new Error('PROMPT_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+  }
+  
+  // For development, generate a key (WARNING: This will be different on each restart)
+  console.warn('⚠️  WARNING: PROMPT_ENCRYPTION_KEY not set. Using generated key (prompts encrypted with this key cannot be decrypted after restart)');
+  return crypto.randomBytes(32);
 }
 
 // Save generated image to database
@@ -693,6 +751,128 @@ app.post('/api/metadata', async (req, res) => {
   } catch (error) {
     console.error('[METADATA] Error:', error);
     res.status(500).json({ error: 'Internal server error', message: error.message });
+  }
+});
+
+// API endpoint for creating custom prompts
+app.post('/api/create-prompt', upload.fields([
+  { name: 'beforeImage', maxCount: 1 },
+  { name: 'afterImage', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    console.log('=== CREATE PROMPT REQUEST ===');
+    
+    const { prompt, priceInTfil, ownerAddress } = req.body;
+    const beforeImageFile = req.files?.['beforeImage']?.[0];
+    const afterImageFile = req.files?.['afterImage']?.[0];
+    
+    // Validate required fields
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+    
+    if (!priceInTfil || isNaN(parseFloat(priceInTfil)) || parseFloat(priceInTfil) < 0) {
+      return res.status(400).json({ error: 'Valid price is required (must be 0 or greater)' });
+    }
+    
+    if (!ownerAddress) {
+      return res.status(400).json({ error: 'Owner address is required' });
+    }
+    
+    console.log('Prompt:', prompt.substring(0, 50) + '...');
+    console.log('Price:', priceInTfil, 'tFIL');
+    console.log('Owner:', ownerAddress);
+    console.log('Before image:', beforeImageFile ? 'Yes' : 'No');
+    console.log('After image:', afterImageFile ? 'Yes' : 'No');
+    
+    // Encrypt the prompt
+    const encryptionKey = getEncryptionKey();
+    const encryptedPrompt = encryptPrompt(prompt.trim(), encryptionKey);
+    console.log('Prompt encrypted successfully');
+    
+    // Upload images to Filecoin if provided
+    let beforeImageUrl = null;
+    let afterImageUrl = null;
+    
+    if (beforeImageFile) {
+      try {
+        console.log('Uploading before image to Filecoin...');
+        const fileName = `before-${Date.now()}-${beforeImageFile.originalname}`;
+        const fileBuffer = beforeImageFile.buffer;
+        const mimeType = beforeImageFile.mimetype || 'image/jpeg';
+        
+        const uploadResult = await uploadToFilecoin(fileBuffer, fileName, mimeType);
+        beforeImageUrl = uploadResult.gatewayUrl;
+        console.log('Before image uploaded:', beforeImageUrl);
+      } catch (error) {
+        console.error('Error uploading before image:', error.message);
+        return res.status(500).json({ 
+          error: 'Failed to upload before image',
+          message: error.message 
+        });
+      }
+    }
+    
+    if (afterImageFile) {
+      try {
+        console.log('Uploading after image to Filecoin...');
+        const fileName = `after-${Date.now()}-${afterImageFile.originalname}`;
+        const fileBuffer = afterImageFile.buffer;
+        const mimeType = afterImageFile.mimetype || 'image/jpeg';
+        
+        const uploadResult = await uploadToFilecoin(fileBuffer, fileName, mimeType);
+        afterImageUrl = uploadResult.gatewayUrl;
+        console.log('After image uploaded:', afterImageUrl);
+      } catch (error) {
+        console.error('Error uploading after image:', error.message);
+        return res.status(500).json({ 
+          error: 'Failed to upload after image',
+          message: error.message 
+        });
+      }
+    }
+    
+    // Save to Supabase prompts table
+    try {
+      const insertData = {
+        owner_address: ownerAddress,
+        encrypted_prompt: encryptedPrompt,
+        price_in_tfil: parseFloat(priceInTfil),
+        before_image_url: beforeImageUrl,
+        after_image_url: afterImageUrl
+      };
+      
+      console.log('Saving to Supabase prompts table...');
+      const { data, error } = await supabase
+        .from('prompts')
+        .insert([insertData])
+        .select();
+      
+      if (error) {
+        console.error('Supabase Insert Error:', error);
+        throw error;
+      }
+      
+      console.log('Prompt saved successfully:', data);
+      
+      res.json({
+        success: true,
+        message: 'Prompt created and encrypted successfully',
+        promptId: data[0]?.id
+      });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      res.status(500).json({
+        error: 'Failed to save prompt to database',
+        message: dbError.message
+      });
+    }
+  } catch (error) {
+    console.error('Error creating prompt:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
   }
 });
 
