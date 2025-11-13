@@ -94,7 +94,7 @@ export function UsePromptPage({ prompt, onBack, onHome }: UsePromptPageProps) {
       // Now decrypt the prompt after payment is confirmed
       const decryptPrompt = async () => {
         try {
-          const response = await fetch('http://localhost:3001/api/use-prompt', {
+          const response = await fetch('https://crafture-topi.onrender.com/api/use-prompt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -141,7 +141,7 @@ export function UsePromptPage({ prompt, onBack, onHome }: UsePromptPageProps) {
     try {
       const imageUrls = selectedNFTs.map(nft => nft.image_url);
       
-      const response = await fetch('http://localhost:3001/api/generate-image', {
+      const response = await fetch('https://crafture-topi.onrender.com/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

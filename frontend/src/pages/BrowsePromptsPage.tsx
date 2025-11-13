@@ -35,7 +35,7 @@ export function BrowsePromptsPage({ onBack }: BrowsePromptsPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:3001/api/prompts');
+      const response = await fetch('https://crafture-topi.onrender.com/api/prompts');
       if (!response.ok) {
         throw new Error('Failed to fetch prompts');
       }

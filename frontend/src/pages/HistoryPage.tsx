@@ -36,7 +36,7 @@ export function HistoryPage({ onBack }: HistoryPageProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`http://localhost:3001/api/history/${address}`);
+        const res = await fetch(`https://crafture-topi.onrender.com/api/history/${address}`);
         if (!res.ok) throw new Error('Failed to fetch history');
         const data = await res.json();
         setItems(data.items || []);

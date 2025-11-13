@@ -1116,7 +1116,7 @@ async function initializeServer() {
 
 app.listen(PORT, () => {
   console.log(`AI Image Generation API running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
+  console.log(`Health check: https://crafture-topi.onrender.com/api/health`);
   
   // Initialize SDK and payment setup in background (don't block server startup)
   initializeServer().catch(err => {

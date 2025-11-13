@@ -80,7 +80,7 @@ export function CustomPromptsPage({ onBack }: CustomPromptsPageProps) {
         formData.append('afterImage', afterImage);
       }
 
-      const response = await fetch('http://localhost:3001/api/create-prompt', {
+      const response = await fetch('https://crafture-topi.onrender.com/api/create-prompt', {
         method: 'POST',
         body: formData,
       });
